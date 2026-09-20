@@ -1,0 +1,10 @@
+{
+    "name": "wupi-engine",
+    "version": "1.0.0",
+    "description": "WUPI Engine: the WUPI Sorry gate (WupiFilter) and the WUPI hybrid memory engine (WupiMemory, RRF + local bge-small embeddings) in one TauriTavern / SillyTavern extension",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "test": "node test/filter-tests.mjs && node test/memory-tests.mjs"
+    }
+}

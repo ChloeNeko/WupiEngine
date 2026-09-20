@@ -1,0 +1,629 @@
+/* =========================================================================
+   WUPI Engine styles (WupiFilter + WupiMemory in one extension).
+   Both settings panels open as popups from the wand extensions menu.
+   Everything stays scoped under .wupi-engine- / .wupi-fl / .wupi-mem so it
+   never leaks into the rest of the app. Theme variables keep the colors in
+   sync with the user's theme, which is what prevents white-on-white fields.
+   ========================================================================= */
+
+/* --- wand menu entries (the host provides .list-group-item styling) --- */
+
+#extensionsMenu .wupi-engine-item i {
+    width: 1.25em;
+    text-align: center;
+    flex: 0 0 auto;
+}
+
+/* --- shared popup panel chrome --- */
+
+.wupi-engine-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.05em;
+    padding: 2px 2px 10px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #4b4b57);
+    margin-bottom: 4px;
+}
+
+.wupi-engine-content {
+    padding: 0 4px;
+}
+
+/* =========================================================================
+   WupiFilter panel
+   ========================================================================= */
+
+/* Friendly intro under the panel header */
+.wupi-fl-intro {
+    font-size: 0.9em;
+    opacity: 0.85;
+    line-height: 1.55;
+    margin: 8px 0 4px;
+}
+
+/* Rounded cards for each section */
+.wupi-fl-block {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid var(--SmartThemeBorderColor, #4b4b57);
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.18);
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #1c1c24) 60%, transparent);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.12);
+}
+
+.wupi-fl-block-title {
+    font-size: 0.74em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--SmartThemeQuoteColor, inherit);
+    opacity: 0.9;
+    margin-bottom: 10px;
+}
+
+/* --- inputs: explicit theme colors, never browser-default white boxes --- */
+
+.wupi-fl input[type="text"],
+.wupi-fl textarea {
+    width: 100%;
+    background-color: var(--SmartThemeBlurTintColor, #232330);
+    color: var(--SmartThemeBodyColor, var(--SmartThemeFontColor, #e8e8ef));
+    border: 1px solid var(--SmartThemeBorderColor, #52525e);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.95em;
+    outline: none;
+    box-shadow: none;
+    transition: border-color 0.15s ease;
+}
+
+.wupi-fl input[type="text"]:focus,
+.wupi-fl textarea:focus {
+    border-color: var(--SmartThemeQuoteColor, #8f7fe8);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--SmartThemeQuoteColor, #8f7fe8) 25%, transparent);
+}
+
+.wupi-fl input::placeholder,
+.wupi-fl textarea::placeholder {
+    color: var(--SmartThemeBodyColor, #999);
+    opacity: 0.55;
+}
+
+.wupi-fl-textarea {
+    resize: vertical;
+    min-height: 3.6em;
+    font-family: inherit;
+    line-height: 1.45;
+}
+
+/* --- switch toggles ---------------------------------------------------- */
+
+.wupi-fl-switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+    padding: 7px 9px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    user-select: none;
+}
+
+.wupi-fl-switch:hover {
+    background-color: rgba(128, 128, 160, 0.12);
+}
+
+.wupi-fl-switch-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.wupi-fl-switch-track {
+    position: relative;
+    flex: 0 0 auto;
+    width: 2.6em;
+    height: 1.45em;
+    border-radius: 999px;
+    background-color: rgba(128, 128, 150, 0.4);
+    border: 1px solid var(--SmartThemeBorderColor, #52525e);
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.wupi-fl-switch-knob {
+    position: absolute;
+    top: 50%;
+    left: 0.14em;
+    width: 1.05em;
+    height: 1.05em;
+    border-radius: 50%;
+    background-color: var(--SmartThemeBodyColor, #e8e8ef);
+    transform: translateY(-50%);
+    transition: left 0.18s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.wupi-fl-switch-input:checked + .wupi-fl-switch-track {
+    background-color: color-mix(in srgb, var(--SmartThemeQuoteColor, #8f7fe8) 65%, transparent);
+    border-color: var(--SmartThemeQuoteColor, #8f7fe8);
+}
+
+.wupi-fl-switch-input:checked + .wupi-fl-switch-track .wupi-fl-switch-knob {
+    left: calc(100% - 1.2em);
+}
+
+.wupi-fl-switch-input:focus-visible + .wupi-fl-switch-track {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--SmartThemeQuoteColor, #8f7fe8) 35%, transparent);
+}
+
+.wupi-fl-switch-label {
+    font-size: 0.92em;
+    line-height: 1.35;
+}
+
+/* --- blocked word chips -------------------------------------------------- */
+
+.wupi-fl-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 2px;
+}
+
+.wupi-fl-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 11px;
+    border-radius: 999px;
+    font-size: 0.84em;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeQuoteColor, #8f7fe8) 55%, transparent);
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #8f7fe8) 14%, transparent);
+    color: var(--SmartThemeBodyColor, inherit);
+    word-break: break-word;
+}
+
+.wupi-fl-chip-empty {
+    border-style: dashed;
+    opacity: 0.55;
+    border-color: var(--SmartThemeBorderColor, #52525e);
+    background: transparent;
+}
+
+/* --- sliders ---------------------------------------------------------- */
+
+.wupi-fl-slider {
+    margin: 12px 0;
+}
+
+.wupi-fl-slider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+}
+
+.wupi-fl-slider-name {
+    opacity: 0.85;
+}
+
+.wupi-fl-slider-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--SmartThemeQuoteColor, inherit);
+    white-space: nowrap;
+}
+
+.wupi-fl input[type="range"] {
+    width: 100%;
+    accent-color: var(--SmartThemeQuoteColor, #8f7fe8);
+}
+
+/* --- fields ------------------------------------------------------------- */
+
+.wupi-fl-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 0.88em;
+    margin: 8px 0;
+}
+
+.wupi-fl-field-label {
+    opacity: 0.8;
+}
+
+/* --- rows and buttons ---------------------------------------------------- */
+
+.wupi-fl-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    margin: 8px 0;
+}
+
+.wupi-fl-row > .wupi-fl-field {
+    flex: 1 1 auto;
+    min-width: 10em;
+}
+
+.wupi-fl-row-end {
+    display: flex;
+    gap: 8px;
+}
+
+.wupi-fl .menu_button.wupi-fl-btn {
+    border-radius: 10px;
+    padding: 8px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    user-select: none;
+}
+
+.wupi-fl .menu_button.wupi-fl-btn:hover {
+    border-color: var(--SmartThemeQuoteColor, #8f7fe8);
+}
+
+.wupi-fl .menu_button.wupi-fl-btn:active {
+    transform: translateY(1px);
+}
+
+/* --- status line and stat tiles ------------------------------------------- */
+
+.wupi-fl-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.86em;
+    opacity: 0.9;
+    margin: 2px 0 10px;
+}
+
+.wupi-fl-dot {
+    flex: 0 0 auto;
+    width: 0.6em;
+    height: 0.6em;
+    border-radius: 50%;
+    background-color: rgba(150, 150, 160, 0.6);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.wupi-fl-dot-on {
+    background-color: #4cc38a;
+    box-shadow: 0 0 6px rgba(76, 195, 138, 0.8);
+}
+
+.wupi-fl-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 4px 0 8px;
+}
+
+.wupi-fl-tile {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--SmartThemeBorderColor, #4b4b57);
+    background: rgba(0, 0, 0, 0.16);
+    text-align: center;
+}
+
+.wupi-fl-tile-num {
+    font-size: 1.5em;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    color: var(--SmartThemeQuoteColor, inherit);
+}
+
+.wupi-fl-tile-label {
+    font-size: 0.78em;
+    opacity: 0.7;
+    text-transform: lowercase;
+}
+
+/* --- text lines ---------------------------------------------------------- */
+
+.wupi-fl-note {
+    font-size: 0.84em;
+    opacity: 0.75;
+    margin: 6px 0;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.wupi-fl-note code {
+    background: var(--black30a, rgba(0, 0, 0, 0.35));
+    padding: 0 0.35em;
+    border-radius: 4px;
+}
+
+.wupi-fl-hint {
+    font-size: 0.82em;
+    opacity: 0.62;
+    margin: 5px 0 2px;
+    line-height: 1.5;
+}
+
+/* --- tester verdict ------------------------------------------------------- */
+
+.wupi-fl-verdict {
+    font-size: 0.88em;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px dashed var(--SmartThemeBorderColor, #52525e);
+    opacity: 0.85;
+    word-break: break-word;
+}
+
+.wupi-fl-verdict-good {
+    border-style: solid;
+    border-color: color-mix(in srgb, #4cc38a 55%, transparent);
+    background: color-mix(in srgb, #4cc38a 10%, transparent);
+}
+
+.wupi-fl-verdict-bad {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--fullred, #e05555) 55%, transparent);
+    background: color-mix(in srgb, var(--fullred, #e05555) 10%, transparent);
+}
+
+/* --- collapsible advanced sections ---------------------------------------- */
+
+.wupi-fl-advanced {
+    margin: 10px 0 2px;
+}
+
+.wupi-fl-advanced summary {
+    font-size: 0.84em;
+    opacity: 0.75;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+}
+
+.wupi-fl-advanced summary:hover {
+    opacity: 1;
+}
+
+.wupi-fl-advanced[open] summary {
+    margin-bottom: 6px;
+}
+
+/* =========================================================================
+   WupiMemory panel
+   ========================================================================= */
+
+/* Friendly one-line intro under the panel header */
+.wupi-mem-intro {
+    font-size: 0.9em;
+    opacity: 0.85;
+    line-height: 1.5;
+    margin: 6px 0;
+}
+
+/* Rounded cards for each section */
+.wupi-mem-block {
+    margin: 10px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--SmartThemeBorderColor, #4b4b57);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.18);
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #1c1c24) 60%, transparent);
+}
+
+.wupi-mem-block-title {
+    font-size: 0.78em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--SmartThemeQuoteColor, inherit);
+    opacity: 0.9;
+    margin-bottom: 8px;
+}
+
+/* --- inputs: the fix for white fields ------------------------------- */
+/* Explicit background AND text color from the theme, so inputs are never
+   browser-default white boxes in dark themes (or white text on white in
+   light themes). */
+
+.wupi-mem input[type="text"],
+.wupi-mem input[type="number"],
+.wupi-mem select,
+.wupi-mem textarea {
+    width: 100%;
+    background-color: var(--SmartThemeBlurTintColor, #232330);
+    color: var(--SmartThemeBodyColor, var(--SmartThemeFontColor, #e8e8ef));
+    border: 1px solid var(--SmartThemeBorderColor, #52525e);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.95em;
+    outline: none;
+    box-shadow: none;
+}
+
+.wupi-mem select {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+        linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 16px) calc(50% - 2px), calc(100% - 11px) calc(50% - 2px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 28px;
+}
+
+.wupi-mem input[type="text"]:focus,
+.wupi-mem input[type="number"]:focus,
+.wupi-mem select:focus,
+.wupi-mem textarea:focus {
+    border-color: var(--SmartThemeQuoteColor, #8f7fe8);
+}
+
+.wupi-mem input[type="checkbox"] {
+    width: 1.05em;
+    height: 1.05em;
+    accent-color: var(--SmartThemeQuoteColor, #8f7fe8);
+    vertical-align: middle;
+}
+
+.wupi-mem input[type="range"] {
+    width: 100%;
+    accent-color: var(--SmartThemeQuoteColor, #8f7fe8);
+}
+
+/* Placeholder text follows the theme too */
+.wupi-mem input::placeholder,
+.wupi-mem textarea::placeholder {
+    color: var(--SmartThemeBodyColor, #999);
+    opacity: 0.55;
+}
+
+/* --- layout helpers -------------------------------------------------- */
+
+.wupi-mem-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    margin: 8px 0;
+}
+
+.wupi-mem-row > * {
+    flex: 1 1 auto;
+    min-width: 9em;
+}
+
+.wupi-mem-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.88em;
+}
+
+.wupi-mem-field-label {
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wupi-mem label.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 7px 0;
+    padding: 6px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.wupi-mem label.checkbox-label:hover {
+    background-color: rgba(128, 128, 160, 0.12);
+}
+
+/* --- buttons ---------------------------------------------------------- */
+
+.wupi-mem .menu_button.wupi-mem-btn {
+    border-radius: 8px;
+    padding: 7px 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.wupi-mem .menu_button.wupi-mem-btn:hover {
+    border-color: var(--SmartThemeQuoteColor, #8f7fe8);
+}
+
+.wupi-mem .menu_button.wupi-mem-btn.wupi-mem-danger {
+    color: var(--fullred, #e05555);
+    border-color: color-mix(in srgb, var(--fullred, #e05555) 45%, transparent);
+}
+
+/* --- text lines ------------------------------------------------------- */
+
+.wupi-mem-status {
+    font-size: 0.82em;
+    opacity: 0.8;
+    margin: 6px 0;
+    word-break: break-word;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.wupi-mem-note {
+    font-size: 0.84em;
+    opacity: 0.72;
+    margin: 6px 0;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.wupi-mem-hint {
+    font-size: 0.82em;
+    opacity: 0.6;
+    margin: 4px 0 2px;
+    line-height: 1.5;
+}
+
+.wupi-mem-note code,
+.wupi-mem-hint code {
+    background: var(--black30a, rgba(0, 0, 0, 0.35));
+    padding: 0 0.35em;
+    border-radius: 4px;
+}
+
+/* --- collapsible advanced sections ------------------------------------ */
+
+.wupi-mem-advanced {
+    margin: 8px 0 2px;
+}
+
+.wupi-mem-advanced summary {
+    font-size: 0.84em;
+    opacity: 0.75;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+}
+
+.wupi-mem-advanced summary:hover {
+    opacity: 1;
+}
+
+.wupi-mem-advanced[open] summary {
+    margin-bottom: 6px;
+}
+
+/* --- token slider row --------------------------------------------------- */
+
+.wupi-mem-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+.wupi-mem-slider-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 6em;
+}
+
+.wupi-mem-token-value {
+    font-weight: 700;
+    min-width: 7.5em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}

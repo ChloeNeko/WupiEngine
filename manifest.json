@@ -1,0 +1,13 @@
+{
+    "display_name": "WUPI Engine",
+    "loading_order": 20,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Chloe",
+    "version": "1.1.0",
+    "homePage": "",
+    "auto_update": false,
+    "generate_interceptor": "WupiEngine_interceptGeneration"
+}
