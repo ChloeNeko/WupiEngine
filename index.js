@@ -16,11 +16,9 @@
  *
  *   It also adds a variety note to every reroll (swipe or regenerate). A
  *   reroll sends the exact same prompt as the attempt before it, so the
- *   model tends to land on the same most-likely reply again and again. Each
- *   reroll instead gets one random creative directive, which shifts what
- *   the most likely continuation is. The note never mentions or quotes the
- *   previous attempt: the model cannot see it, and showing it would only
- *   seed the same words. See src/variety.js.
+ *   model tends to land on the same most-likely reply again and again. The
+ *   note is one generic line: this is a reroll, write a different version.
+ *   See src/variety.js.
  *
  * - WupiMemory: the WUPI (old) hybrid memory engine (src-tauri/src/memory*.rs):
  *   local bge-small embeddings + BM25 sparse retrieval fused by score-aware
@@ -41,13 +39,9 @@ import { ARGUMENT_TYPE, SlashCommandArgument } from '../../../slash-commands/Sla
 import { parsePhrases, matchFirstWords } from './src/matcher.js';
 import { buildFilterPanel } from './src/filterUi.js';
 import {
-    DEFAULT_VARIETY_DIRECTIVES,
-    DEFAULT_VARIETY_TONES,
     DEFAULT_VARIETY_TEMPLATE,
-    buildVarietyNote,
-    rollVariety,
     shouldApplyVarietyNote,
-    upgradeVarietyPool,
+    upgradeVarietyNote,
 } from './src/variety.js';
 // Memory
 import { MemoryStore } from './src/store.js';
@@ -96,8 +90,6 @@ const defaultFilterSettings = Object.freeze({
     // reply.
     varietyNoteEnabled: true,
     varietyNoteTemplate: DEFAULT_VARIETY_TEMPLATE,
-    varietyDirectives: DEFAULT_VARIETY_DIRECTIVES.join('\n'),
-    varietyTones: DEFAULT_VARIETY_TONES.join('\n'),
 });
 
 // extension_prompt_types / roles (src/scripts/extension-prompts.js):
@@ -142,28 +134,29 @@ function getMemorySettings() {
 const filterSettings = getFilterSettings();
 const memorySettings = getMemorySettings();
 
-// Variety pool upgrade (see src/variety.js). v1.2.2 checked once at init
+// Variety note upgrade (see src/variety.js). v1.2.2 checked once at init
 // and its own defaults carried the version stamp; this host hydrates the
 // saved settings into the extension settings object only after extension
 // init, so the check ran against defaults, reported "already current", and
-// the saved legacy pool then landed on top untouched. The check therefore
-// also re-runs lazily right before each reroll note is built, when saved
+// the saved note then landed on top untouched. The check therefore also
+// re-runs lazily right before each reroll note is built, when saved
 // settings are guaranteed to be in place. Never move the version stamp
 // into defaultFilterSettings: a default carrying it makes the check
 // permanently false for fresh states.
-function ensureVarietyPoolUpgraded() {
-    const upgraded = upgradeVarietyPool({
+function ensureVarietyNoteUpgraded() {
+    const upgraded = upgradeVarietyNote({
         version: filterSettings.varietyPoolVersion ?? 0,
-        directives: filterSettings.varietyDirectives,
         template: filterSettings.varietyNoteTemplate,
-        tones: filterSettings.varietyTones,
     });
     if (upgraded.changed) {
+        // The shape and mood pools are gone; clear their saved remnants.
+        delete filterSettings.varietyDirectives;
+        delete filterSettings.varietyTones;
         Object.assign(filterSettings, upgraded.fields);
         save();
     }
 }
-ensureVarietyPoolUpgraded();
+ensureVarietyNoteUpgraded();
 
 function save() {
     context.saveSettingsDebounced();
@@ -465,28 +458,11 @@ function lastSavedMessage() {
     return chat.length ? chat[chat.length - 1] : null;
 }
 
-// The previous roll, so back to back rerolls cannot draw the same shape.
-let lastVarietyDirective = '';
-
 function applyVarietyNoteToPrompt(chat, type) {
-    ensureVarietyPoolUpgraded();
+    ensureVarietyNoteUpgraded();
     const last = lastSavedMessage();
     const apply = filterSettings.varietyNoteEnabled && shouldApplyVarietyNote(type, last);
-    const roll = apply
-        ? rollVariety({
-            directives: filterSettings.varietyDirectives,
-            tones: filterSettings.varietyTones,
-            avoid: lastVarietyDirective,
-        })
-        : { directive: '', tone: '' };
-    const note = apply
-        ? buildVarietyNote({
-            template: filterSettings.varietyNoteTemplate,
-            directives: roll.directive ? [roll.directive] : '',
-            tones: roll.tone ? [roll.tone] : '',
-        })
-        : '';
-    if (apply) lastVarietyDirective = roll.directive;
+    const note = apply ? String(filterSettings.varietyNoteTemplate ?? '').trim() : '';
     if (note && Array.isArray(chat) && chat.length) {
         chat.push({ name: 'WupiFilter', is_user: false, is_system: true, mes: note });
     }
@@ -497,9 +473,6 @@ function applyVarietyNoteToPrompt(chat, type) {
         lastIsUser: last ? Boolean(last.is_user) : null,
         apply,
         noteLen: note.length,
-        dir: roll.directive.slice(0, 48),
-        tone: roll.tone.slice(0, 24),
-        setExt: typeof context.setExtensionPrompt === 'function',
     });
     return Boolean(note);
 }
@@ -560,12 +533,8 @@ const filterUiApi = {
     },
     test: testOpening,
     previewVariety: () => {
-        ensureVarietyPoolUpgraded();
-        return buildVarietyNote({
-            template: filterSettings.varietyNoteTemplate,
-            directives: filterSettings.varietyDirectives,
-            tones: filterSettings.varietyTones,
-        });
+        ensureVarietyNoteUpgraded();
+        return String(filterSettings.varietyNoteTemplate ?? '').trim();
     },
 };
 

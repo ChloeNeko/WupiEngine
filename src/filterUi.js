@@ -163,18 +163,6 @@ export function buildFilterPanel(ctx, settings, api) {
         settings.varietyNoteTemplate = varietyTemplateInput.value;
         api.save();
     });
-    const directivesInput = el('textarea', { class: 'wupi-fl-textarea', rows: '8' });
-    directivesInput.value = settings.varietyDirectives ?? '';
-    directivesInput.addEventListener('change', () => {
-        settings.varietyDirectives = directivesInput.value;
-        api.save();
-    });
-    const tonesInput = el('textarea', { class: 'wupi-fl-textarea', rows: '4' });
-    tonesInput.value = settings.varietyTones ?? '';
-    tonesInput.addEventListener('change', () => {
-        settings.varietyTones = tonesInput.value;
-        api.save();
-    });
 
     // --- assemble ---
     const content = el('div', { class: 'wupi-engine-content' },
@@ -219,24 +207,20 @@ export function buildFilterPanel(ctx, settings, api) {
 
         block('Reroll variety',
             switchToggle('Add a variety note to rerolls', settings.varietyNoteEnabled, (v) => { settings.varietyNoteEnabled = v; api.save(); }),
-            hint('A reroll sends the exact same prompt as the attempt before it, so the model often writes the same reply again. When this is on, every reroll secretly gets one random creative nudge, which steers it toward a different reply. The old reply is never shown to the model.'),
+            hint('A reroll sends the exact same prompt as the attempt before it, so the model often writes the same reply again. When this is on, every reroll quietly carries one short hidden note telling the model to write a different version. Nothing is added to your chat.'),
             el('div', { class: 'wupi-fl-row' },
-                button('Preview a rolled note', () => {
+                button('Preview the note', () => {
                     const note = api.previewVariety?.();
                     ctx.callGenericPopup?.(
-                        note ? el('pre', { text: note }) : 'The note template is empty, so no note is sent.',
+                        note ? el('pre', { text: note }) : 'The note is empty, so no note is sent.',
                         ctx.POPUP_TYPE?.TEXT ?? 1,
                     );
                 }),
             ),
             el('details', { class: 'wupi-fl-advanced' },
                 el('summary', { text: 'Advanced: variety note' }),
-                area('Variety note template', varietyTemplateInput),
-                hint('{{directive}} becomes one random line from the shape list below. {{tone}} becomes one random line from the mood list. {{nonce}} becomes a random marker so the API treats each reroll as a brand new request. Leave the template empty to send no note.'),
-                area('Opening shapes (one per line)', directivesInput),
-                hint('One line is picked at random for each reroll. Each line should say how the reply opens, so the model cannot fall back on the same old opening.'),
-                area('Moods (one per line)', tonesInput),
-                hint('One line is picked at random for each reroll and fills {{tone}} in the template.'),
+                area('Variety note text', varietyTemplateInput),
+                hint('The whole note sent with every reroll as a hidden system message. Leave it empty to send no note.'),
             ),
         ),
 
