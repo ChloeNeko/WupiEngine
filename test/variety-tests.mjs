@@ -8,11 +8,14 @@ import {
     DEFAULT_VARIETY_TEMPLATE,
     LEGACY_VARIETY_DIRECTIVES_TEXT,
     LEGACY_VARIETY_TEMPLATE,
+    LEGACY2_VARIETY_DIRECTIVES_TEXT,
+    LEGACY2_VARIETY_TEMPLATE,
     eligibleForVarietyNote,
     shouldApplyVarietyNote,
     parseDirectiveLines,
     buildVarietyNote,
     rollVariety,
+    upgradeVarietyPool,
 } from '../src/variety.js';
 
 let passed = 0;
@@ -167,10 +170,50 @@ check('buildVarietyNote fills the tone placeholder', () => {
     assert.equal(note, 'S: x. M: y');
 });
 
-check('legacy defaults are preserved for the settings upgrade check', () => {
-    assert.ok(LEGACY_VARIETY_DIRECTIVES_TEXT.includes('body language'));
-    assert.ok(LEGACY_VARIETY_TEMPLATE.includes('{{directive}}'));
-    assert.ok(!LEGACY_VARIETY_TEMPLATE.includes('{{tone}}'));
+check('upgradeVarietyPool moves an untouched legacy pool to the current one', () => {
+    const r = upgradeVarietyPool({
+        version: 0,
+        directives: LEGACY_VARIETY_DIRECTIVES_TEXT,
+        template: LEGACY_VARIETY_TEMPLATE,
+        tones: '',
+    });
+    assert.equal(r.changed, true);
+    assert.equal(r.fields.varietyDirectives, DEFAULT_VARIETY_DIRECTIVES.join('\n'));
+    assert.equal(r.fields.varietyNoteTemplate, DEFAULT_VARIETY_TEMPLATE);
+    assert.equal(r.fields.varietyTones, DEFAULT_VARIETY_TONES.join('\n'));
+    assert.equal(r.fields.varietyPoolVersion, 3);
+});
+
+check('upgradeVarietyPool survives windows line endings and stray whitespace', () => {
+    const dirty = LEGACY_VARIETY_DIRECTIVES_TEXT.replace(/\n/g, '\r\n') + '\r\n';
+    const r = upgradeVarietyPool({ version: 2, directives: dirty, template: LEGACY_VARIETY_TEMPLATE + ' ', tones: 'calm' });
+    assert.equal(r.fields.varietyDirectives, DEFAULT_VARIETY_DIRECTIVES.join('\n'));
+    assert.equal(r.fields.varietyNoteTemplate, DEFAULT_VARIETY_TEMPLATE);
+    assert.equal(r.fields.varietyTones, undefined); // a filled tone list is kept
+});
+
+check('upgradeVarietyPool also lifts the v1.2.2 pool', () => {
+    const r = upgradeVarietyPool({
+        version: 2,
+        directives: LEGACY2_VARIETY_DIRECTIVES_TEXT,
+        template: LEGACY2_VARIETY_TEMPLATE,
+        tones: DEFAULT_VARIETY_TONES.join('\n'),
+    });
+    assert.equal(r.fields.varietyDirectives, DEFAULT_VARIETY_DIRECTIVES.join('\n'));
+    assert.equal(r.fields.varietyNoteTemplate, DEFAULT_VARIETY_TEMPLATE);
+});
+
+check('upgradeVarietyPool never touches a customized pool', () => {
+    const mine = 'open with my own custom line.\nopen with another one.';
+    const r = upgradeVarietyPool({ version: 0, directives: mine, template: 'do {{directive}} things', tones: 'calm' });
+    assert.equal(r.fields.varietyDirectives, undefined);
+    assert.equal(r.fields.varietyNoteTemplate, undefined);
+    assert.equal(r.fields.varietyTones, undefined);
+    assert.equal(r.fields.varietyPoolVersion, 3);
+});
+
+check('upgradeVarietyPool is a no-op at the current version', () => {
+    assert.equal(upgradeVarietyPool({ version: 3, directives: 'anything', template: 'x', tones: 'y' }).changed, false);
 });
 
 check('rolls actually differ for the model', () => {

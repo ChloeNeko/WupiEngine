@@ -44,11 +44,10 @@ import {
     DEFAULT_VARIETY_DIRECTIVES,
     DEFAULT_VARIETY_TONES,
     DEFAULT_VARIETY_TEMPLATE,
-    LEGACY_VARIETY_DIRECTIVES_TEXT,
-    LEGACY_VARIETY_TEMPLATE,
     buildVarietyNote,
     rollVariety,
     shouldApplyVarietyNote,
+    upgradeVarietyPool,
 } from './src/variety.js';
 // Memory
 import { MemoryStore } from './src/store.js';
@@ -99,7 +98,6 @@ const defaultFilterSettings = Object.freeze({
     varietyNoteTemplate: DEFAULT_VARIETY_TEMPLATE,
     varietyDirectives: DEFAULT_VARIETY_DIRECTIVES.join('\n'),
     varietyTones: DEFAULT_VARIETY_TONES.join('\n'),
-    varietyPoolVersion: 2,
 });
 
 // extension_prompt_types / roles (src/scripts/extension-prompts.js):
@@ -144,24 +142,28 @@ function getMemorySettings() {
 const filterSettings = getFilterSettings();
 const memorySettings = getMemorySettings();
 
-// v1.2.2 pool upgrade (see src/variety.js): the v1.2.0 directives described
-// qualities the cloned reply already had, so rerolls could comply and clone
-// anyway. Saved settings still holding the untouched v1.2.0 defaults move
-// to the new pool once; hand-edited pools keep every word their owner
-// wrote.
-if (filterSettings.varietyPoolVersion !== 2) {
-    if (filterSettings.varietyDirectives === LEGACY_VARIETY_DIRECTIVES_TEXT) {
-        filterSettings.varietyDirectives = DEFAULT_VARIETY_DIRECTIVES.join('\n');
+// Variety pool upgrade (see src/variety.js). v1.2.2 checked once at init
+// and its own defaults carried the version stamp; this host hydrates the
+// saved settings into the extension settings object only after extension
+// init, so the check ran against defaults, reported "already current", and
+// the saved legacy pool then landed on top untouched. The check therefore
+// also re-runs lazily right before each reroll note is built, when saved
+// settings are guaranteed to be in place. Never move the version stamp
+// into defaultFilterSettings: a default carrying it makes the check
+// permanently false for fresh states.
+function ensureVarietyPoolUpgraded() {
+    const upgraded = upgradeVarietyPool({
+        version: filterSettings.varietyPoolVersion ?? 0,
+        directives: filterSettings.varietyDirectives,
+        template: filterSettings.varietyNoteTemplate,
+        tones: filterSettings.varietyTones,
+    });
+    if (upgraded.changed) {
+        Object.assign(filterSettings, upgraded.fields);
+        save();
     }
-    if (filterSettings.varietyNoteTemplate === LEGACY_VARIETY_TEMPLATE) {
-        filterSettings.varietyNoteTemplate = DEFAULT_VARIETY_TEMPLATE;
-    }
-    if (!String(filterSettings.varietyTones ?? '').trim()) {
-        filterSettings.varietyTones = DEFAULT_VARIETY_TONES.join('\n');
-    }
-    filterSettings.varietyPoolVersion = 2;
-    save();
 }
+ensureVarietyPoolUpgraded();
 
 function save() {
     context.saveSettingsDebounced();
@@ -467,6 +469,7 @@ function lastSavedMessage() {
 let lastVarietyDirective = '';
 
 function applyVarietyNoteToPrompt(chat, type) {
+    ensureVarietyPoolUpgraded();
     const last = lastSavedMessage();
     const apply = filterSettings.varietyNoteEnabled && shouldApplyVarietyNote(type, last);
     const roll = apply
@@ -556,11 +559,14 @@ const filterUiApi = {
         save();
     },
     test: testOpening,
-    previewVariety: () => buildVarietyNote({
-        template: filterSettings.varietyNoteTemplate,
-        directives: filterSettings.varietyDirectives,
-        tones: filterSettings.varietyTones,
-    }),
+    previewVariety: () => {
+        ensureVarietyPoolUpgraded();
+        return buildVarietyNote({
+            template: filterSettings.varietyNoteTemplate,
+            directives: filterSettings.varietyDirectives,
+            tones: filterSettings.varietyTones,
+        });
+    },
 };
 
 // ===========================================================================
