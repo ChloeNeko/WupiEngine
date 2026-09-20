@@ -44,7 +44,15 @@ export const DEFAULT_VARIETY_TONES = Object.freeze([
     'heated and quick',
 ]);
 
+// No banned words and no banned moves (Chloe, 2026-09-20: he wants
+// different rerolls, not restrictions on what the character may do). The
+// note only asks for a genuinely different version and supplies the shape
+// and mood that make one happen.
 export const DEFAULT_VARIETY_TEMPLATE =
+    '[System note: this is a fresh take on a reply that already exists, so make this version genuinely different. Shape: {{directive}} Mood: {{tone}} Do not reuse distinctive phrases from earlier replies. (nonce: {{nonce}})]';
+
+/** The v1.2.3 template (it banned stock reaction beats; that went too far). */
+export const LEGACY3_VARIETY_TEMPLATE =
     '[System note: this is a fresh take on a reply that already exists, not a touch up of the old one. Do not open with the character name plus an instant reaction, and do not slide back into that default after the first sentence. Stock reaction beats (scoffing, smirking, eye rolling, sighing) are off limits in this reply. Shape: {{directive}} Mood: {{tone}} Do not reuse distinctive phrases from earlier replies. (nonce: {{nonce}})]';
 
 /** The v1.2.0 defaults, kept only to upgrade untouched saved settings once. */
@@ -83,7 +91,7 @@ export const LEGACY2_VARIETY_DIRECTIVES_TEXT = [
 export const LEGACY2_VARIETY_TEMPLATE =
     '[System note: this is a fresh take on a reply that already exists. The default opening (the character name followed by an immediate reaction) is banned this time. Shape: {{directive}} Mood: {{tone}} Do not reuse distinctive phrases from earlier replies. (nonce: {{nonce}})]';
 
-export const VARIETY_POOL_VERSION = 3;
+export const VARIETY_POOL_VERSION = 4;
 
 function normalizePoolText(text) {
     return String(text ?? '')
@@ -127,7 +135,7 @@ export function upgradeVarietyPool({ version = 0, directives = '', template = ''
     }
     const tpl = normalizeTemplateText(template);
     const isDefaultTemplate = !tpl
-        || [LEGACY_VARIETY_TEMPLATE, LEGACY2_VARIETY_TEMPLATE]
+        || [LEGACY_VARIETY_TEMPLATE, LEGACY2_VARIETY_TEMPLATE, LEGACY3_VARIETY_TEMPLATE]
             .some((k) => normalizeTemplateText(k) === tpl);
     if (isDefaultTemplate) {
         fields.varietyNoteTemplate = DEFAULT_VARIETY_TEMPLATE;

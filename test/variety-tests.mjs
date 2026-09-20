@@ -10,6 +10,7 @@ import {
     LEGACY_VARIETY_TEMPLATE,
     LEGACY2_VARIETY_DIRECTIVES_TEXT,
     LEGACY2_VARIETY_TEMPLATE,
+    LEGACY3_VARIETY_TEMPLATE,
     eligibleForVarietyNote,
     shouldApplyVarietyNote,
     parseDirectiveLines,
@@ -139,6 +140,10 @@ check('default pool and template compose into a sane note', () => {
     assert.ok(note.includes(DEFAULT_VARIETY_TONES[0]));
     assert.ok(note.includes('(nonce: '));
     assert.ok(!note.includes('{{'));
+    // Chloe's standing requirement: the note suggests structure, it never
+    // bans words or moves.
+    assert.ok(!note.includes('banned'));
+    assert.ok(!note.includes('off limits'));
 });
 
 check('every default directive dictates the opening shape', () => {
@@ -181,7 +186,7 @@ check('upgradeVarietyPool moves an untouched legacy pool to the current one', ()
     assert.equal(r.fields.varietyDirectives, DEFAULT_VARIETY_DIRECTIVES.join('\n'));
     assert.equal(r.fields.varietyNoteTemplate, DEFAULT_VARIETY_TEMPLATE);
     assert.equal(r.fields.varietyTones, DEFAULT_VARIETY_TONES.join('\n'));
-    assert.equal(r.fields.varietyPoolVersion, 3);
+    assert.equal(r.fields.varietyPoolVersion, 4);
 });
 
 check('upgradeVarietyPool survives windows line endings and stray whitespace', () => {
@@ -203,17 +208,29 @@ check('upgradeVarietyPool also lifts the v1.2.2 pool', () => {
     assert.equal(r.fields.varietyNoteTemplate, DEFAULT_VARIETY_TEMPLATE);
 });
 
+check('upgradeVarietyPool lifts the v1.2.3 template that banned words', () => {
+    const r = upgradeVarietyPool({
+        version: 3,
+        directives: DEFAULT_VARIETY_DIRECTIVES.join('\n'),
+        template: LEGACY3_VARIETY_TEMPLATE,
+        tones: DEFAULT_VARIETY_TONES.join('\n'),
+    });
+    assert.equal(r.changed, true);
+    assert.equal(r.fields.varietyNoteTemplate, DEFAULT_VARIETY_TEMPLATE);
+    assert.ok(!DEFAULT_VARIETY_TEMPLATE.includes('off limits'));
+});
+
 check('upgradeVarietyPool never touches a customized pool', () => {
     const mine = 'open with my own custom line.\nopen with another one.';
     const r = upgradeVarietyPool({ version: 0, directives: mine, template: 'do {{directive}} things', tones: 'calm' });
     assert.equal(r.fields.varietyDirectives, undefined);
     assert.equal(r.fields.varietyNoteTemplate, undefined);
     assert.equal(r.fields.varietyTones, undefined);
-    assert.equal(r.fields.varietyPoolVersion, 3);
+    assert.equal(r.fields.varietyPoolVersion, 4);
 });
 
 check('upgradeVarietyPool is a no-op at the current version', () => {
-    assert.equal(upgradeVarietyPool({ version: 3, directives: 'anything', template: 'x', tones: 'y' }).changed, false);
+    assert.equal(upgradeVarietyPool({ version: 4, directives: 'anything', template: 'x', tones: 'y' }).changed, false);
 });
 
 check('rolls actually differ for the model', () => {
