@@ -37,6 +37,27 @@ export function eligibleForVarietyNote(type) {
     return REROLL_TYPES.has(String(type ?? ''));
 }
 
+/**
+ * Types that are definitely not a reroll of an existing reply. Each of them
+ * builds on a prompt that already differs from the attempt before it.
+ */
+const NON_REROLL_TYPES = new Set(['normal', 'group', 'append', 'continue', 'impersonate', 'quiet', 'notify']);
+
+/**
+ * The flexible eligibility used at the prompt interceptor. Hosts differ in
+ * what type string they hand extensions, so an unknown or missing type
+ * falls back to the saved chat: a reroll replaces a character reply (the
+ * chat ends with the character's message), while a fresh send has just
+ * appended the player's message.
+ */
+export function shouldApplyVarietyNote(type, lastSavedMessage) {
+    const t = String(type ?? '');
+    if (REROLL_TYPES.has(t)) return true;
+    if (NON_REROLL_TYPES.has(t)) return false;
+    if (!lastSavedMessage) return false;
+    return !lastSavedMessage.is_user;
+}
+
 /** One directive per non-empty line, trimmed. */
 export function parseDirectiveLines(text) {
     return String(text ?? '')

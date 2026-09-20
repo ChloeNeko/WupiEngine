@@ -43,8 +43,8 @@ import { buildFilterPanel } from './src/filterUi.js';
 import {
     DEFAULT_VARIETY_DIRECTIVES,
     DEFAULT_VARIETY_TEMPLATE,
-    eligibleForVarietyNote,
     buildVarietyNote,
+    shouldApplyVarietyNote,
 } from './src/variety.js';
 // Memory
 import { MemoryStore } from './src/store.js';
@@ -66,7 +66,6 @@ const context = SillyTavern.getContext();
 const FILTER_KEY = 'wupiFilter';
 const MEMORY_KEY = 'wupiMemory';
 const FILTER_PROMPT_KEY = 'wupiFilterRetryNote';
-const VARIETY_PROMPT_KEY = 'wupiFilterVarietyNote';
 const MEMORY_PROMPT_KEY = 'wupiMemory';
 
 // extension_prompt position 1 = in chat, role 0 = system (the same numbering
@@ -241,7 +240,6 @@ function onGenerationStarted(type, options, dryRun) {
         // A fresh user action: every new reply gets a full retry budget.
         gen.retries = 0;
         clearRetryNote();
-        clearVarietyNote();
     }
     gen.ourRetry = false;
 }
@@ -252,14 +250,12 @@ function onGenerationStopped() {
     if (!gen.retrying) {
         // A user abort of our retry stream: drop the one shot notes.
         clearRetryNote();
-        clearVarietyNote();
     }
 }
 
 function onFilterChatChanged() {
     Object.assign(gen, { gatable: false, tripped: false, sawToken: false, retrying: false, ourRetry: false, retries: 0 });
     clearRetryNote();
-    clearVarietyNote();
     filterPanelHost.refresh();
 }
 
@@ -320,7 +316,6 @@ function onStreamToken(a, b) {
 function onFilterMessageReceived(messageId, type) {
     if (gen.retrying) return;
     clearRetryNote(); // a reply just landed, the one shot note is done
-    clearVarietyNote();
     if (!filterSettings.enabled || gen.tripped) return;
     if (!filterSettings.checkNonStreaming) return;
     if (!gen.gatable || gen.sawToken) return; // streamed replies were watched live
@@ -414,37 +409,69 @@ function clearRetryNote() {
 // ===========================================================================
 // WupiFilter: reroll variety note (see src/variety.js)
 // ===========================================================================
+// v1.2.0 delivered the note through setExtensionPrompt on
+// GENERATION_AFTER_COMMANDS. On this host that never showed up in the
+// outgoing request (regenerates stayed byte-identical), and nothing outside
+// the WebView can prove otherwise. v1.2.1 rides the manifest's
+// generate_interceptor instead: the same hook the token limit already uses
+// to drop messages from the prompt-build copy of the chat. The note is
+// appended as the last system message of that copy only; the saved chat is
+// never touched, so no cleanup lifecycle is needed.
 
-function applyVarietyNote() {
-    const note = buildVarietyNote({
-        template: filterSettings.varietyNoteTemplate,
-        directives: filterSettings.varietyDirectives,
-    });
-    if (!note || typeof context.setExtensionPrompt !== 'function') return;
-    context.setExtensionPrompt(VARIETY_PROMPT_KEY, note, NOTE_POSITION, NOTE_DEPTH, false, NOTE_ROLE);
+// A short ring buffer of what the variety machinery observed, kept in the
+// saved settings so it can be read back from settings.json on disk: the
+// WebView console is not captured by default, so this is the only
+// telemetry that survives a generation. Capped, saved debounced.
+const VARIETY_DIAG_MAX = 30;
+
+function pushVarietyDiag(entry) {
+    try {
+        const list = Array.isArray(filterSettings.varietyDiag) ? filterSettings.varietyDiag : [];
+        list.push({ t: new Date().toISOString(), ...entry });
+        filterSettings.varietyDiag = list.slice(-VARIETY_DIAG_MAX);
+        save();
+    } catch { /* diagnostics must never touch generation */ }
 }
 
-function clearVarietyNote() {
-    try {
-        context.setExtensionPrompt?.(VARIETY_PROMPT_KEY, '', NOTE_POSITION, NOTE_DEPTH, false, NOTE_ROLE);
-    } catch { /* not fatal */ }
+function lastSavedMessage() {
+    const chat = context.chat ?? [];
+    return chat.length ? chat[chat.length - 1] : null;
 }
 
-// GENERATION_AFTER_COMMANDS is awaited before the prompt is assembled, so a
-// note injected here reaches this generation's outgoing prompt. The reroll
-// types are the ones whose prompt is otherwise identical to the attempt
-// before it (the reply being replaced is not in the prompt).
-async function onVarietyAfterCommands(type, options, dryRun) {
-    if (!filterSettings.varietyNoteEnabled) return;
-    if (dryRun || options?.quiet_prompt) return;
-    const t = String(type ?? '');
-    if (t === 'quiet' || t === 'notify') return;
-    if (!eligibleForVarietyNote(t)) return;
-    try {
-        applyVarietyNote();
-    } catch (err) {
-        console.error('WupiFilter: variety note failed', err);
+function applyVarietyNoteToPrompt(chat, type) {
+    const last = lastSavedMessage();
+    const apply = filterSettings.varietyNoteEnabled && shouldApplyVarietyNote(type, last);
+    const note = apply
+        ? buildVarietyNote({
+            template: filterSettings.varietyNoteTemplate,
+            directives: filterSettings.varietyDirectives,
+        })
+        : '';
+    if (note && Array.isArray(chat) && chat.length) {
+        chat.push({ name: 'WupiFilter', is_user: false, is_system: true, mes: note });
     }
+    pushVarietyDiag({
+        where: 'intercept',
+        type: String(type ?? ''),
+        chatLen: Array.isArray(chat) ? chat.length : -1,
+        lastIsUser: last ? Boolean(last.is_user) : null,
+        apply,
+        noteLen: note.length,
+        setExt: typeof context.setExtensionPrompt === 'function',
+    });
+    return Boolean(note);
+}
+
+// Diagnostics only. This listener was the v1.2.0 delivery path; recording
+// whether the host fires it, and with which type string, is what makes the
+// ring buffer decisive when something still does not add up.
+async function onVarietyAfterCommands(type, options, dryRun) {
+    pushVarietyDiag({
+        where: 'afterCommands',
+        type: String(type ?? ''),
+        dryRun: Boolean(dryRun),
+        quiet: Boolean(options?.quiet_prompt),
+    });
 }
 
 // ===========================================================================
@@ -859,6 +886,12 @@ globalThis.WupiEngine_interceptGeneration = async function (chat, _contextSize, 
     } catch (err) {
         // A tokenizer hiccup must never block generation.
         console.error('WupiMemory: token limit enforcement failed', err);
+    }
+    try {
+        applyVarietyNoteToPrompt(chat, type);
+    } catch (err) {
+        // The note is an enhancement, never a requirement.
+        console.error('WupiFilter: variety note failed', err);
     }
 };
 

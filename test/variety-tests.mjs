@@ -6,6 +6,7 @@ import {
     DEFAULT_VARIETY_DIRECTIVES,
     DEFAULT_VARIETY_TEMPLATE,
     eligibleForVarietyNote,
+    shouldApplyVarietyNote,
     parseDirectiveLines,
     buildVarietyNote,
 } from '../src/variety.js';
@@ -25,6 +26,34 @@ check('only reroll types are eligible', () => {
     assert.equal(eligibleForVarietyNote('quiet'), false);
     assert.equal(eligibleForVarietyNote('impersonate'), false);
     assert.equal(eligibleForVarietyNote(undefined), false);
+});
+
+check('shouldApply: known reroll types always apply', () => {
+    const charMsg = { is_user: false };
+    const userMsg = { is_user: true };
+    assert.equal(shouldApplyVarietyNote('swipe', charMsg), true);
+    assert.equal(shouldApplyVarietyNote('regenerate', userMsg), true);
+});
+
+check('shouldApply: known non-reroll types never apply', () => {
+    const charMsg = { is_user: false };
+    for (const t of ['normal', 'group', 'append', 'continue', 'impersonate', 'quiet', 'notify']) {
+        assert.equal(shouldApplyVarietyNote(t, charMsg), false, `type ${t}`);
+    }
+});
+
+check('shouldApply: unknown type falls back to the saved chat', () => {
+    // A reroll replaces a character reply, so the chat ends with it.
+    assert.equal(shouldApplyVarietyNote('', { is_user: false }), true);
+    assert.equal(shouldApplyVarietyNote(undefined, { is_user: false }), true);
+    assert.equal(shouldApplyVarietyNote('weirdHostType', { is_user: false }), true);
+    // A fresh send has just appended the player's message.
+    assert.equal(shouldApplyVarietyNote('', { is_user: true }), false);
+    assert.equal(shouldApplyVarietyNote(undefined, { is_user: true }), false);
+    assert.equal(shouldApplyVarietyNote('weirdHostType', { is_user: true }), false);
+    // Nothing saved yet (first message ever): not a reroll.
+    assert.equal(shouldApplyVarietyNote('', null), false);
+    assert.equal(shouldApplyVarietyNote(undefined, undefined), false);
 });
 
 check('directive lines split, trim and drop empties', () => {
