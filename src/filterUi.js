@@ -169,6 +169,12 @@ export function buildFilterPanel(ctx, settings, api) {
         settings.varietyDirectives = directivesInput.value;
         api.save();
     });
+    const tonesInput = el('textarea', { class: 'wupi-fl-textarea', rows: '4' });
+    tonesInput.value = settings.varietyTones ?? '';
+    tonesInput.addEventListener('change', () => {
+        settings.varietyTones = tonesInput.value;
+        api.save();
+    });
 
     // --- assemble ---
     const content = el('div', { class: 'wupi-engine-content' },
@@ -226,9 +232,11 @@ export function buildFilterPanel(ctx, settings, api) {
             el('details', { class: 'wupi-fl-advanced' },
                 el('summary', { text: 'Advanced: variety note' }),
                 area('Variety note template', varietyTemplateInput),
-                hint('{{directive}} becomes one random line from the list below. {{nonce}} becomes a random marker so the API treats each reroll as a brand new request. Leave the template empty to send no note.'),
-                area('Creative directives (one per line)', directivesInput),
-                hint('One line is picked at random for each reroll. Keep each line short and concrete.'),
+                hint('{{directive}} becomes one random line from the shape list below. {{tone}} becomes one random line from the mood list. {{nonce}} becomes a random marker so the API treats each reroll as a brand new request. Leave the template empty to send no note.'),
+                area('Opening shapes (one per line)', directivesInput),
+                hint('One line is picked at random for each reroll. Each line should say how the reply opens, so the model cannot fall back on the same old opening.'),
+                area('Moods (one per line)', tonesInput),
+                hint('One line is picked at random for each reroll and fills {{tone}} in the template.'),
             ),
         ),
 

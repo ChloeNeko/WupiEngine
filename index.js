@@ -42,8 +42,12 @@ import { parsePhrases, matchFirstWords } from './src/matcher.js';
 import { buildFilterPanel } from './src/filterUi.js';
 import {
     DEFAULT_VARIETY_DIRECTIVES,
+    DEFAULT_VARIETY_TONES,
     DEFAULT_VARIETY_TEMPLATE,
+    LEGACY_VARIETY_DIRECTIVES_TEXT,
+    LEGACY_VARIETY_TEMPLATE,
     buildVarietyNote,
+    rollVariety,
     shouldApplyVarietyNote,
 } from './src/variety.js';
 // Memory
@@ -94,6 +98,8 @@ const defaultFilterSettings = Object.freeze({
     varietyNoteEnabled: true,
     varietyNoteTemplate: DEFAULT_VARIETY_TEMPLATE,
     varietyDirectives: DEFAULT_VARIETY_DIRECTIVES.join('\n'),
+    varietyTones: DEFAULT_VARIETY_TONES.join('\n'),
+    varietyPoolVersion: 2,
 });
 
 // extension_prompt_types / roles (src/scripts/extension-prompts.js):
@@ -137,6 +143,25 @@ function getMemorySettings() {
 
 const filterSettings = getFilterSettings();
 const memorySettings = getMemorySettings();
+
+// v1.2.2 pool upgrade (see src/variety.js): the v1.2.0 directives described
+// qualities the cloned reply already had, so rerolls could comply and clone
+// anyway. Saved settings still holding the untouched v1.2.0 defaults move
+// to the new pool once; hand-edited pools keep every word their owner
+// wrote.
+if (filterSettings.varietyPoolVersion !== 2) {
+    if (filterSettings.varietyDirectives === LEGACY_VARIETY_DIRECTIVES_TEXT) {
+        filterSettings.varietyDirectives = DEFAULT_VARIETY_DIRECTIVES.join('\n');
+    }
+    if (filterSettings.varietyNoteTemplate === LEGACY_VARIETY_TEMPLATE) {
+        filterSettings.varietyNoteTemplate = DEFAULT_VARIETY_TEMPLATE;
+    }
+    if (!String(filterSettings.varietyTones ?? '').trim()) {
+        filterSettings.varietyTones = DEFAULT_VARIETY_TONES.join('\n');
+    }
+    filterSettings.varietyPoolVersion = 2;
+    save();
+}
 
 function save() {
     context.saveSettingsDebounced();
@@ -438,15 +463,27 @@ function lastSavedMessage() {
     return chat.length ? chat[chat.length - 1] : null;
 }
 
+// The previous roll, so back to back rerolls cannot draw the same shape.
+let lastVarietyDirective = '';
+
 function applyVarietyNoteToPrompt(chat, type) {
     const last = lastSavedMessage();
     const apply = filterSettings.varietyNoteEnabled && shouldApplyVarietyNote(type, last);
+    const roll = apply
+        ? rollVariety({
+            directives: filterSettings.varietyDirectives,
+            tones: filterSettings.varietyTones,
+            avoid: lastVarietyDirective,
+        })
+        : { directive: '', tone: '' };
     const note = apply
         ? buildVarietyNote({
             template: filterSettings.varietyNoteTemplate,
-            directives: filterSettings.varietyDirectives,
+            directives: roll.directive ? [roll.directive] : '',
+            tones: roll.tone ? [roll.tone] : '',
         })
         : '';
+    if (apply) lastVarietyDirective = roll.directive;
     if (note && Array.isArray(chat) && chat.length) {
         chat.push({ name: 'WupiFilter', is_user: false, is_system: true, mes: note });
     }
@@ -457,6 +494,8 @@ function applyVarietyNoteToPrompt(chat, type) {
         lastIsUser: last ? Boolean(last.is_user) : null,
         apply,
         noteLen: note.length,
+        dir: roll.directive.slice(0, 48),
+        tone: roll.tone.slice(0, 24),
         setExt: typeof context.setExtensionPrompt === 'function',
     });
     return Boolean(note);
@@ -520,6 +559,7 @@ const filterUiApi = {
     previewVariety: () => buildVarietyNote({
         template: filterSettings.varietyNoteTemplate,
         directives: filterSettings.varietyDirectives,
+        tones: filterSettings.varietyTones,
     }),
 };
 

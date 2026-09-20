@@ -4,11 +4,15 @@
 import assert from 'node:assert/strict';
 import {
     DEFAULT_VARIETY_DIRECTIVES,
+    DEFAULT_VARIETY_TONES,
     DEFAULT_VARIETY_TEMPLATE,
+    LEGACY_VARIETY_DIRECTIVES_TEXT,
+    LEGACY_VARIETY_TEMPLATE,
     eligibleForVarietyNote,
     shouldApplyVarietyNote,
     parseDirectiveLines,
     buildVarietyNote,
+    rollVariety,
 } from '../src/variety.js';
 
 let passed = 0;
@@ -124,12 +128,49 @@ check('default pool and template compose into a sane note', () => {
     const note = buildVarietyNote({
         template: DEFAULT_VARIETY_TEMPLATE,
         directives: DEFAULT_VARIETY_DIRECTIVES,
+        tones: DEFAULT_VARIETY_TONES,
         rng: () => 0,
     });
     assert.ok(note.startsWith('[System note:'));
     assert.ok(note.includes(DEFAULT_VARIETY_DIRECTIVES[0]));
+    assert.ok(note.includes(DEFAULT_VARIETY_TONES[0]));
     assert.ok(note.includes('(nonce: '));
     assert.ok(!note.includes('{{'));
+});
+
+check('every default directive dictates the opening shape', () => {
+    // The point of the v1.2.2 rewrite: a quality like "body language" can be
+    // satisfied by the very clone the reroll is escaping, a required opening
+    // shape cannot.
+    for (const line of DEFAULT_VARIETY_DIRECTIVES) {
+        assert.ok(line.startsWith('open '), line);
+    }
+});
+
+check('rollVariety avoids repeating the previous directive', () => {
+    const lines = ['a.', 'b.', 'c.'];
+    assert.equal(rollVariety({ directives: lines, rng: () => 0 }).directive, 'a.');
+    assert.equal(rollVariety({ directives: lines, avoid: 'a.', rng: () => 0 }).directive, 'b.');
+});
+
+check('rollVariety repeats a single line even when avoided', () => {
+    assert.equal(rollVariety({ directives: ['only.'], avoid: 'only.', rng: () => 0 }).directive, 'only.');
+});
+
+check('rollVariety rolls a mood only when the list has lines', () => {
+    assert.equal(rollVariety({ directives: 'd.', tones: 'calm\nheated', rng: () => 0.99 }).tone, 'heated');
+    assert.equal(rollVariety({ directives: 'd.', rng: () => 0 }).tone, '');
+});
+
+check('buildVarietyNote fills the tone placeholder', () => {
+    const note = buildVarietyNote({ template: 'S: {{directive}} M: {{tone}}', directives: 'x.', tones: 'y', rng: () => 0 });
+    assert.equal(note, 'S: x. M: y');
+});
+
+check('legacy defaults are preserved for the settings upgrade check', () => {
+    assert.ok(LEGACY_VARIETY_DIRECTIVES_TEXT.includes('body language'));
+    assert.ok(LEGACY_VARIETY_TEMPLATE.includes('{{directive}}'));
+    assert.ok(!LEGACY_VARIETY_TEMPLATE.includes('{{tone}}'));
 });
 
 check('rolls actually differ for the model', () => {
