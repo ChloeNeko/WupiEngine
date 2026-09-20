@@ -14,6 +14,14 @@
  *   marker stops providers with prompt caching from replaying the same
  *   refusal.
  *
+ *   It also adds a variety note to every reroll (swipe or regenerate). A
+ *   reroll sends the exact same prompt as the attempt before it, so the
+ *   model tends to land on the same most-likely reply again and again. Each
+ *   reroll instead gets one random creative directive, which shifts what
+ *   the most likely continuation is. The note never mentions or quotes the
+ *   previous attempt: the model cannot see it, and showing it would only
+ *   seed the same words. See src/variety.js.
+ *
  * - WupiMemory: the WUPI (old) hybrid memory engine (src-tauri/src/memory*.rs):
  *   local bge-small embeddings + BM25 sparse retrieval fused by score-aware
  *   Reciprocal Rank Fusion with an absolute dense-cosine floor, injected as a
@@ -32,6 +40,12 @@ import { ARGUMENT_TYPE, SlashCommandArgument } from '../../../slash-commands/Sla
 // Filter
 import { parsePhrases, matchFirstWords } from './src/matcher.js';
 import { buildFilterPanel } from './src/filterUi.js';
+import {
+    DEFAULT_VARIETY_DIRECTIVES,
+    DEFAULT_VARIETY_TEMPLATE,
+    eligibleForVarietyNote,
+    buildVarietyNote,
+} from './src/variety.js';
 // Memory
 import { MemoryStore } from './src/store.js';
 import { TransformersEmbedder } from './src/embedder.js';
@@ -52,6 +66,7 @@ const context = SillyTavern.getContext();
 const FILTER_KEY = 'wupiFilter';
 const MEMORY_KEY = 'wupiMemory';
 const FILTER_PROMPT_KEY = 'wupiFilterRetryNote';
+const VARIETY_PROMPT_KEY = 'wupiFilterVarietyNote';
 const MEMORY_PROMPT_KEY = 'wupiMemory';
 
 // extension_prompt position 1 = in chat, role 0 = system (the same numbering
@@ -74,6 +89,12 @@ const defaultFilterSettings = Object.freeze({
     statsBlocked: 0,
     statsRetried: 0,
     lastBlocked: '',
+    // Reroll variety note (src/variety.js). Independent of the gate: it runs
+    // on every swipe and regenerate so rerolls stop converging on the same
+    // reply.
+    varietyNoteEnabled: true,
+    varietyNoteTemplate: DEFAULT_VARIETY_TEMPLATE,
+    varietyDirectives: DEFAULT_VARIETY_DIRECTIVES.join('\n'),
 });
 
 // extension_prompt_types / roles (src/scripts/extension-prompts.js):
@@ -220,6 +241,7 @@ function onGenerationStarted(type, options, dryRun) {
         // A fresh user action: every new reply gets a full retry budget.
         gen.retries = 0;
         clearRetryNote();
+        clearVarietyNote();
     }
     gen.ourRetry = false;
 }
@@ -228,14 +250,16 @@ function onGenerationStopped() {
     gen.gatable = false;
     gen.sawToken = false;
     if (!gen.retrying) {
-        // A user abort of our retry stream: drop the one shot note.
+        // A user abort of our retry stream: drop the one shot notes.
         clearRetryNote();
+        clearVarietyNote();
     }
 }
 
 function onFilterChatChanged() {
     Object.assign(gen, { gatable: false, tripped: false, sawToken: false, retrying: false, ourRetry: false, retries: 0 });
     clearRetryNote();
+    clearVarietyNote();
     filterPanelHost.refresh();
 }
 
@@ -296,6 +320,7 @@ function onStreamToken(a, b) {
 function onFilterMessageReceived(messageId, type) {
     if (gen.retrying) return;
     clearRetryNote(); // a reply just landed, the one shot note is done
+    clearVarietyNote();
     if (!filterSettings.enabled || gen.tripped) return;
     if (!filterSettings.checkNonStreaming) return;
     if (!gen.gatable || gen.sawToken) return; // streamed replies were watched live
@@ -387,6 +412,42 @@ function clearRetryNote() {
 }
 
 // ===========================================================================
+// WupiFilter: reroll variety note (see src/variety.js)
+// ===========================================================================
+
+function applyVarietyNote() {
+    const note = buildVarietyNote({
+        template: filterSettings.varietyNoteTemplate,
+        directives: filterSettings.varietyDirectives,
+    });
+    if (!note || typeof context.setExtensionPrompt !== 'function') return;
+    context.setExtensionPrompt(VARIETY_PROMPT_KEY, note, NOTE_POSITION, NOTE_DEPTH, false, NOTE_ROLE);
+}
+
+function clearVarietyNote() {
+    try {
+        context.setExtensionPrompt?.(VARIETY_PROMPT_KEY, '', NOTE_POSITION, NOTE_DEPTH, false, NOTE_ROLE);
+    } catch { /* not fatal */ }
+}
+
+// GENERATION_AFTER_COMMANDS is awaited before the prompt is assembled, so a
+// note injected here reaches this generation's outgoing prompt. The reroll
+// types are the ones whose prompt is otherwise identical to the attempt
+// before it (the reply being replaced is not in the prompt).
+async function onVarietyAfterCommands(type, options, dryRun) {
+    if (!filterSettings.varietyNoteEnabled) return;
+    if (dryRun || options?.quiet_prompt) return;
+    const t = String(type ?? '');
+    if (t === 'quiet' || t === 'notify') return;
+    if (!eligibleForVarietyNote(t)) return;
+    try {
+        applyVarietyNote();
+    } catch (err) {
+        console.error('WupiFilter: variety note failed', err);
+    }
+}
+
+// ===========================================================================
 // WupiFilter: panel api + slash commands
 // ===========================================================================
 
@@ -395,6 +456,7 @@ function filterStatusText() {
         `enabled=${filterSettings.enabled}`,
         `blocked list=${filterSettings.blockedWords || '(empty)'}`,
         `watching the first ${filterSettings.wordWindow} words, retry limit ${filterSettings.maxRetries}, whole words=${filterSettings.wholeWords}, case sensitive=${filterSettings.caseSensitive}`,
+        `variety note on rerolls=${filterSettings.varietyNoteEnabled ? 'on' : 'off'}`,
         `cut ${filterSettings.statsBlocked} reply(ies), made ${filterSettings.statsRetried} retry(ies)`,
     ];
     if (filterSettings.lastBlocked) {
@@ -428,6 +490,10 @@ const filterUiApi = {
         save();
     },
     test: testOpening,
+    previewVariety: () => buildVarietyNote({
+        template: filterSettings.varietyNoteTemplate,
+        directives: filterSettings.varietyDirectives,
+    }),
 };
 
 // ===========================================================================
@@ -1085,6 +1151,7 @@ function registerSlashCommands() {
 context.eventSource.on(context.eventTypes.GENERATION_STARTED, onGenerationStarted);
 context.eventSource.on(context.eventTypes.GENERATION_STOPPED, onGenerationStopped);
 context.eventSource.on(context.eventTypes.MESSAGE_RECEIVED, onFilterMessageReceived);
+context.eventSource.on(context.eventTypes.GENERATION_AFTER_COMMANDS, onVarietyAfterCommands);
 if (context.eventTypes.STREAM_TOKEN_RECEIVED) {
     context.eventSource.on(context.eventTypes.STREAM_TOKEN_RECEIVED, onStreamToken);
 } else {

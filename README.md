@@ -2,7 +2,7 @@
 
 Two tools in one extension for SillyTavern and TauriTavern:
 
-- **WupiFilter** stops bad replies. If the AI starts a reply with a word like "sorry", the reply is cut off and a fresh one is generated right away.
+- **WupiFilter** stops bad replies. If the AI starts a reply with a word like "sorry", the reply is cut off and a fresh one is generated right away. It also nudges every reroll toward a fresh reply, so rerolls stop coming back nearly the same.
 - **WupiMemory** gives each chat a long memory. Before the AI replies, it quietly reminds the AI of the relevant parts of earlier chats.
 
 Everything runs on your device. No server, no API keys.

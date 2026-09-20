@@ -156,11 +156,25 @@ export function buildFilterPanel(ctx, settings, api) {
         api.save();
     });
 
+    // --- reroll variety note ---
+    const varietyTemplateInput = el('textarea', { class: 'wupi-fl-textarea', rows: '3' });
+    varietyTemplateInput.value = settings.varietyNoteTemplate ?? '';
+    varietyTemplateInput.addEventListener('change', () => {
+        settings.varietyNoteTemplate = varietyTemplateInput.value;
+        api.save();
+    });
+    const directivesInput = el('textarea', { class: 'wupi-fl-textarea', rows: '8' });
+    directivesInput.value = settings.varietyDirectives ?? '';
+    directivesInput.addEventListener('change', () => {
+        settings.varietyDirectives = directivesInput.value;
+        api.save();
+    });
+
     // --- assemble ---
     const content = el('div', { class: 'wupi-engine-content' },
         el('div', {
             class: 'wupi-fl-intro',
-            text: 'WupiFilter watches each reply as it streams in. If the AI starts with a blocked word such as "sorry", the reply is cut off at once and regenerated. The stopped attempt is fully removed first, so the new reply starts from a clean slate and is never influenced by the discarded one.',
+            text: 'WupiFilter watches each reply as it streams in. If the AI starts with a blocked word such as "sorry", the reply is cut off at once and regenerated. The stopped attempt is fully removed first, so the new reply starts from a clean slate and is never influenced by the discarded one. It can also nudge every reroll toward a fresh reply, see Reroll variety below.',
         }),
 
         block('Filter',
@@ -194,6 +208,27 @@ export function buildFilterPanel(ctx, settings, api) {
                 el('summary', { text: 'Advanced: retry note' }),
                 area('Retry note template', noteInput),
                 hint('Sent once, only for the retry, then removed. {{nonce}} is replaced with a random marker so the API treats it as a brand new request. Leave empty to send no note at all.'),
+            ),
+        ),
+
+        block('Reroll variety',
+            switchToggle('Add a variety note to rerolls', settings.varietyNoteEnabled, (v) => { settings.varietyNoteEnabled = v; api.save(); }),
+            hint('A reroll sends the exact same prompt as the attempt before it, so the model often writes the same reply again. When this is on, every reroll secretly gets one random creative nudge, which steers it toward a different reply. The old reply is never shown to the model.'),
+            el('div', { class: 'wupi-fl-row' },
+                button('Preview a rolled note', () => {
+                    const note = api.previewVariety?.();
+                    ctx.callGenericPopup?.(
+                        note ? el('pre', { text: note }) : 'The note template is empty, so no note is sent.',
+                        ctx.POPUP_TYPE?.TEXT ?? 1,
+                    );
+                }),
+            ),
+            el('details', { class: 'wupi-fl-advanced' },
+                el('summary', { text: 'Advanced: variety note' }),
+                area('Variety note template', varietyTemplateInput),
+                hint('{{directive}} becomes one random line from the list below. {{nonce}} becomes a random marker so the API treats each reroll as a brand new request. Leave the template empty to send no note.'),
+                area('Creative directives (one per line)', directivesInput),
+                hint('One line is picked at random for each reroll. Keep each line short and concrete.'),
             ),
         ),
 

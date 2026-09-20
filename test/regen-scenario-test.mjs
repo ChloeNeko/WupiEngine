@@ -64,7 +64,7 @@ const excludeSourceHashes = new Set([
 const patched = await eng.search({ partition: chatId, query: userMsg, excludeTurnUuid: turnUuid, excludeSourceHashes });
 const selfHits = patched.hits.filter(isSelf).length;
 console.log(`patched behavior: ${selfHits} of ${patched.hits.length} hits are this turn's own swipes`);
-if (selfHits !== 0) throw new FAIL;
+if (selfHits !== 0) throw new Error('self-echo returned: this turn swipes were retrieved');
 console.log(`patched still retrieves older memory: ${patched.hits.length} hit(s): ${patched.hits.map((h) => h.text.slice(0, 40)).join(' | ')}`);
 // Cross-turn memory must still surface: query the OLD topic with the same
 // exclusions active (a later turn about how they first met).
