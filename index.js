@@ -155,6 +155,11 @@ function ensureVarietyNoteUpgraded() {
         Object.assign(filterSettings, upgraded.fields);
         save();
     }
+    if (filterSettings.varietyDiag !== undefined) {
+        // The diagnostic ring buffer is gone too; drop what it left behind.
+        delete filterSettings.varietyDiag;
+        save();
+    }
 }
 ensureVarietyNoteUpgraded();
 
@@ -438,21 +443,6 @@ function clearRetryNote() {
 // appended as the last system message of that copy only; the saved chat is
 // never touched, so no cleanup lifecycle is needed.
 
-// A short ring buffer of what the variety machinery observed, kept in the
-// saved settings so it can be read back from settings.json on disk: the
-// WebView console is not captured by default, so this is the only
-// telemetry that survives a generation. Capped, saved debounced.
-const VARIETY_DIAG_MAX = 30;
-
-function pushVarietyDiag(entry) {
-    try {
-        const list = Array.isArray(filterSettings.varietyDiag) ? filterSettings.varietyDiag : [];
-        list.push({ t: new Date().toISOString(), ...entry });
-        filterSettings.varietyDiag = list.slice(-VARIETY_DIAG_MAX);
-        save();
-    } catch { /* diagnostics must never touch generation */ }
-}
-
 function lastSavedMessage() {
     const chat = context.chat ?? [];
     return chat.length ? chat[chat.length - 1] : null;
@@ -466,27 +456,7 @@ function applyVarietyNoteToPrompt(chat, type) {
     if (note && Array.isArray(chat) && chat.length) {
         chat.push({ name: 'WupiFilter', is_user: false, is_system: true, mes: note });
     }
-    pushVarietyDiag({
-        where: 'intercept',
-        type: String(type ?? ''),
-        chatLen: Array.isArray(chat) ? chat.length : -1,
-        lastIsUser: last ? Boolean(last.is_user) : null,
-        apply,
-        noteLen: note.length,
-    });
     return Boolean(note);
-}
-
-// Diagnostics only. This listener was the v1.2.0 delivery path; recording
-// whether the host fires it, and with which type string, is what makes the
-// ring buffer decisive when something still does not add up.
-async function onVarietyAfterCommands(type, options, dryRun) {
-    pushVarietyDiag({
-        where: 'afterCommands',
-        type: String(type ?? ''),
-        dryRun: Boolean(dryRun),
-        quiet: Boolean(options?.quiet_prompt),
-    });
 }
 
 // ===========================================================================
@@ -579,23 +549,6 @@ function warnNoChatIdOnce() {
     if (warnedNoChatId) return;
     warnedNoChatId = true;
     console.warn('WupiMemory: no chat id could be resolved, skipping archival so no unattributable rows are created');
-}
-
-/**
- * Persist one small diagnostic snapshot per chat-lifecycle event, so host
- * quirks (payload shapes) can be diagnosed from the IndexedDB file without
- * webview devtools. Never throws.
- */
-async function recordDiag(event, data) {
-    try {
-        let shape;
-        if (data == null) shape = String(data);
-        else if (typeof data === 'string') shape = `str:${data}`;
-        else if (typeof data === 'object') {
-            try { shape = 'obj:' + JSON.stringify(data); } catch { shape = 'obj:<unserializable>'; }
-        } else shape = `${typeof data}:${String(data)}`;
-        await store.setMeta(`diag:${event}`, shape.slice(0, 200));
-    } catch { /* diagnostics must never break the app */ }
 }
 
 // ===========================================================================
@@ -1004,7 +957,6 @@ function normalizeChatName(name) {
  * GROUP_CHAT_DELETED's payload is the group chat id rows were tagged with.
  */
 async function onChatDeleted(name) {
-    recordDiag('CHAT_DELETED', name);
     const chatId = normalizeChatName(name);
     if (!chatId) return;
     try {
@@ -1021,7 +973,6 @@ async function onChatDeleted(name) {
 
 /** CHAT_RENAMED carries { oldFileName, newFileName } (no '.jsonl'). */
 async function onChatRenamed(data) {
-    recordDiag('CHAT_RENAMED', data);
     const oldName = normalizeChatName(data?.oldFileName);
     const newName = normalizeChatName(data?.newFileName);
     if (!oldName || !newName || oldName === newName) return;
@@ -1043,7 +994,6 @@ function onMemoryChatChanged(data) {
     hostChatId = (typeof data === 'string' && data.trim())
         ? data.trim().replace(/\.jsonl$/, '')
         : '';
-    recordDiag('CHAT_CHANGED', data);
     engine.dropCache();
     clearInjectedPrompt();
     memoryPanelHost.refresh();
@@ -1199,7 +1149,6 @@ function registerSlashCommands() {
 context.eventSource.on(context.eventTypes.GENERATION_STARTED, onGenerationStarted);
 context.eventSource.on(context.eventTypes.GENERATION_STOPPED, onGenerationStopped);
 context.eventSource.on(context.eventTypes.MESSAGE_RECEIVED, onFilterMessageReceived);
-context.eventSource.on(context.eventTypes.GENERATION_AFTER_COMMANDS, onVarietyAfterCommands);
 if (context.eventTypes.STREAM_TOKEN_RECEIVED) {
     context.eventSource.on(context.eventTypes.STREAM_TOKEN_RECEIVED, onStreamToken);
 } else {
@@ -1269,12 +1218,6 @@ try {
 } catch (err) {
     console.warn('WupiMemory: untagged-rows purge failed (will retry next load)', err);
 }
-
-// Host diagnostics: record what this build's context actually exposes, so
-// scoping problems are diagnosable straight from the IndexedDB file.
-try {
-    await store.setMeta('diag:contextChatId', `${typeof context.chatId}:${String(context.chatId ?? '')}`.slice(0, 200));
-} catch { /* diagnostics only */ }
 
 initWandMenu();
 registerSlashCommands();
